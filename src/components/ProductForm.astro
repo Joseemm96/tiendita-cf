@@ -1,0 +1,66 @@
+---
+import type { Category, Product } from "@/lib/types";
+import type { StoreSettings } from "@/config/store";
+
+interface Props {
+  product?: Product;
+  categories: Category[];
+  settings: StoreSettings;
+}
+
+const { product, categories, settings } = Astro.props;
+const action = product ? `/api/admin/products/${product.id}` : "/api/admin/products";
+const variants = product?.variants.map((variant) => {
+  const attributes = Object.entries(variant.attributes).map(([key, value]) => `${key}=${value}`).join(", ");
+  return `${variant.label} | ${variant.sku} | ${variant.stock} | ${attributes}`;
+}).join("\n") ?? "Única | SKU-001 | 10 | talla=Única";
+---
+
+<form class="admin-form" method="POST" action={action} enctype="multipart/form-data">
+  <section class="admin-card">
+    <h2>Información</h2>
+    <div class="field"><label for="name">Nombre</label><input id="name" name="name" value={product?.name ?? ""} required maxlength="120" /></div>
+    <div class="field"><label for="description">Descripción</label><textarea id="description" name="description" required maxlength="2500">{product?.description ?? ""}</textarea></div>
+    <div class="field"><label for="categoryId">Categoría</label><select id="categoryId" name="categoryId"><option value="">Sin categoría</option>{categories.map((category) => <option value={category.id} selected={product?.categoryId === category.id}>{category.name}{category.active ? "" : " (inactiva)"}</option>)}</select></div>
+    <div class="field"><label for="itemType">Tipo</label><select id="itemType" name="itemType"><option value="physical" selected={product?.itemType !== "service"}>Producto físico</option><option value="service" selected={product?.itemType === "service"}>Servicio</option></select></div>
+    <div class="field"><label for="variants">Variantes</label><textarea id="variants" name="variants" rows="7" required>{variants}</textarea><p class="field-hint">Una por línea: Etiqueta | SKU | Stock | atributo=valor, atributo=valor. Ejemplo: M · Negro | CAM-M-NEG | 8 | talla=M, color=Negro</p></div>
+  </section>
+
+  <div class="admin-form-side">
+    <section class="admin-card">
+      <h2>Precio</h2>
+      <div class="field"><label for="price">Precio ({settings.currency})</label><input id="price" name="price" type="number" min="0" step="0.01" value={((product?.priceCents ?? 0) / 100).toFixed(2)} required /></div>
+      <div class="field"><label for="compareAt">Precio anterior</label><input id="compareAt" name="compareAt" type="number" min="0" step="0.01" value={product?.compareAtCents ? (product.compareAtCents / 100).toFixed(2) : ""} /></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Imágenes</h2>
+      {product?.images.length ? (
+        <div class="admin-image-grid">
+          {product.images.map((image, index) => (
+            <label class="admin-image-item">
+              <img class="admin-thumbnail" src={image.url} alt={image.alt || `${product.name} ${index + 1}`} />
+              <span>{index === 0 ? "Portada" : `Imagen ${index + 1}`}</span>
+              <span class="checkbox-field"><input name="removeImageIds" type="checkbox" value={image.id} /> Eliminar</span>
+            </label>
+          ))}
+        </div>
+      ) : <p class="field-hint">Este producto todavía no tiene imágenes.</p>}
+      <div class="field"><label for="images">Subir imágenes a R2</label><input id="images" name="images" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif" /></div>
+      <div class="field"><label for="imageUrls">O usar URLs, una por línea</label><textarea id="imageUrls" name="imageUrls" rows="3" placeholder={'https://ejemplo.com/frente.webp\nhttps://ejemplo.com/detalle.webp'}></textarea></div>
+      <p class="field-hint">Hasta 10 imágenes por producto, máximo 5 MB cada una. Las nuevas se agregan al final; la primera imagen disponible funciona como portada.</p>
+    </section>
+
+    <section class="admin-card">
+      <h2>Visibilidad</h2>
+      <label class="checkbox-field"><input type="checkbox" name="active" checked={product?.active ?? true} /> Visible en la tienda</label>
+      <label class="checkbox-field"><input type="checkbox" name="featured" checked={product?.featured ?? false} /> Producto destacado</label>
+      <label class="checkbox-field"><input type="checkbox" name="trackInventory" checked={product?.itemType !== "service"} /> Controlar inventario</label>
+    </section>
+  </div>
+
+  <div class="admin-form-actions">
+    <a class="button button-ghost" href="/admin/productos">Cancelar</a>
+    <button class="button button-dark" type="submit">{product ? "Guardar cambios" : "Crear producto"}</button>
+  </div>
+</form>

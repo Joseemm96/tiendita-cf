@@ -1,0 +1,78 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import ProductCard from "@/components/ProductCard.astro";
+import { getCloudflareEnv, getStoreSettings, listCategories, listProducts } from "@/lib/db";
+
+const { DB } = getCloudflareEnv(Astro.locals);
+const [products, categories, settings] = await Promise.all([
+  listProducts(DB),
+  listCategories(DB),
+  getStoreSettings(DB),
+]);
+---
+
+<BaseLayout settings={settings}>
+  <section class="hero">
+    <img class="hero-background" src={settings.heroImageUrl} alt="" />
+    <div class="hero-overlay" aria-hidden="true"></div>
+    <div class="hero-copy">
+      <h1>{settings.heroTitle}</h1>
+      <p class="hero-lead">{settings.heroSubtitle}</p>
+    </div>
+  </section>
+
+  <section class="collection" id="productos">
+    <div class="catalog-heading">
+      <div>
+        <p class="eyebrow">Catálogo</p>
+        <h2>Nuestros productos</h2>
+      </div>
+      <p>{settings.description}</p>
+    </div>
+    <div class="catalog-tools">
+      <div class="category-filters" aria-label="Filtrar por categoría">
+        <button class="filter-button active" type="button" data-category-filter="all">Todo</button>
+        {categories.map((category) => (
+          <button class="filter-button" type="button" data-category-filter={category.id}>{category.name}</button>
+        ))}
+      </div>
+      <input class="catalog-search" type="search" placeholder="Buscar una pieza…" aria-label="Buscar productos" data-product-search />
+    </div>
+    <div class="product-grid" data-product-grid>
+      {products.map((product, index) => (
+        <div data-product-item data-category={product.categoryId ?? ""} data-name={product.name.toLowerCase()}>
+          <ProductCard product={product} currency={settings.currency} locale={settings.locale} index={index} />
+        </div>
+      ))}
+    </div>
+    <p class="empty-results" data-empty-results hidden>No encontramos productos con esos filtros.</p>
+  </section>
+
+</BaseLayout>
+
+<script>
+  const filters = document.querySelectorAll<HTMLButtonElement>("[data-category-filter]");
+  const search = document.querySelector<HTMLInputElement>("[data-product-search]");
+  const items = document.querySelectorAll<HTMLElement>("[data-product-item]");
+  const empty = document.querySelector<HTMLElement>("[data-empty-results]");
+  let activeCategory = "all";
+
+  function applyFilters() {
+    const term = search?.value.trim().toLowerCase() ?? "";
+    let visible = 0;
+    items.forEach((item) => {
+      const categoryMatches = activeCategory === "all" || item.dataset.category === activeCategory;
+      const searchMatches = !term || item.dataset.name?.includes(term);
+      item.hidden = !(categoryMatches && searchMatches);
+      if (!item.hidden) visible += 1;
+    });
+    if (empty) empty.hidden = visible > 0;
+  }
+
+  filters.forEach((filter) => filter.addEventListener("click", () => {
+    activeCategory = filter.dataset.categoryFilter ?? "all";
+    filters.forEach((item) => item.classList.toggle("active", item === filter));
+    applyFilters();
+  }));
+  search?.addEventListener("input", applyFilters);
+</script>

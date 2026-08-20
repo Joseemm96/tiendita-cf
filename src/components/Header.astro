@@ -1,0 +1,28 @@
+---
+import type { StoreSettings } from "@/config/store";
+import SocialLinks from "@/components/SocialLinks.astro";
+
+interface Props {
+  settings: StoreSettings;
+}
+
+const { settings } = Astro.props;
+---
+
+{settings.announcement && <div class="announcement">{settings.announcement}</div>}
+<header class="site-header">
+  <a class="wordmark" href="/" aria-label={`Inicio de ${settings.brandName}`}>
+    {settings.logoUrl ? (
+      <img class="brand-logo brand-logo-header" src={settings.logoUrl} alt={settings.brandName} />
+    ) : (
+      <><span>{settings.brandName}</span><small>tienda</small></>
+    )}
+  </a>
+  <nav class="desktop-nav" aria-label="Navegación principal">
+    <a href="/#productos">Productos</a>
+    <SocialLinks settings={settings} compact />
+  </nav>
+  <button class="cart-trigger" type="button" data-open-cart aria-label="Abrir carrito">
+    Carrito <span data-cart-count>0</span>
+  </button>
+</header>

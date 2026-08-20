@@ -1,0 +1,74 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { getCloudflareEnv, getStoreSettings } from "@/lib/db";
+const { DB } = getCloudflareEnv(Astro.locals);
+const settings = await getStoreSettings(DB);
+---
+
+<AdminLayout title="Ajustes" settings={settings}>
+  <form class="admin-form" method="POST" action="/api/admin/settings" enctype="multipart/form-data">
+    <section class="admin-card">
+      <h2>Identidad de la tienda</h2>
+      <div class="field"><label for="brandName">Nombre</label><input id="brandName" name="brandName" value={settings.brandName} required /></div>
+      {settings.logoUrl && <img class="admin-logo-preview" src={settings.logoUrl} alt={`Logo actual de ${settings.brandName}`} />}
+      <div class="field"><label for="logoImage">Logo de la tienda</label><input id="logoImage" name="logoImage" type="file" accept="image/jpeg,image/png,image/webp,image/avif" /><p class="field-hint">Se recomienda PNG o WebP transparente. Máximo 5 MB.</p></div>
+      <div class="field"><label for="logoUrl">O usa una URL de logo</label><input id="logoUrl" name="logoUrl" type="text" value={settings.logoUrl} placeholder="https://…" /></div>
+      {settings.logoUrl && <label class="checkbox-field"><input name="removeLogo" type="checkbox" /> Eliminar logo y volver a mostrar el nombre de la tienda</label>}
+      <div class="field"><label for="tagline">Frase principal</label><input id="tagline" name="tagline" value={settings.tagline} required /></div>
+      <div class="field"><label for="description">Descripción</label><textarea id="description" name="description">{settings.description}</textarea></div>
+      <div class="field"><label for="announcement">Anuncio superior</label><input id="announcement" name="announcement" value={settings.announcement} /></div>
+      <hr class="admin-divider" />
+      <h2>Portada</h2>
+      <div class="field"><label for="heroTitle">Título del hero</label><input id="heroTitle" name="heroTitle" value={settings.heroTitle} required maxlength="120" /></div>
+      <div class="field"><label for="heroSubtitle">Subtítulo del hero</label><textarea id="heroSubtitle" name="heroSubtitle" maxlength="320" required>{settings.heroSubtitle}</textarea></div>
+      <img class="admin-hero-preview" src={settings.heroImageUrl} alt="Vista previa de la imagen actual del hero" />
+      <div class="field"><label for="heroImage">Nueva imagen de fondo</label><input id="heroImage" name="heroImage" type="file" accept="image/jpeg,image/png,image/webp,image/avif" /><p class="field-hint">JPEG, PNG, WebP o AVIF. Máximo 5 MB.</p></div>
+      <div class="field"><label for="heroImageUrl">O usa una URL de imagen</label><input id="heroImageUrl" name="heroImageUrl" type="text" value={settings.heroImageUrl} /><p class="field-hint">Al subir un archivo, este tendrá prioridad sobre la URL.</p></div>
+      <hr class="admin-divider" />
+      <h2>Imagen del acceso al dashboard</h2>
+      <p class="field-hint">Se muestra en el panel izquierdo de la pantalla de login. Si no configuras una imagen, se conserva el diseño abstracto.</p>
+      <img class="admin-login-preview" src={settings.loginImageUrl} alt="Vista previa de la imagen actual del login" hidden={!settings.loginImageUrl} data-login-image-preview />
+      <div class="field"><label for="loginImage">Nueva imagen del login</label><input id="loginImage" name="loginImage" type="file" accept="image/jpeg,image/png,image/webp,image/avif" data-login-image-input /><p class="field-hint">Se recomienda una imagen vertical o cuadrada. Máximo 5 MB.</p></div>
+      <div class="field"><label for="loginImageUrl">O usa una URL de imagen</label><input id="loginImageUrl" name="loginImageUrl" type="text" value={settings.loginImageUrl} placeholder="https://…" /><p class="field-hint">Al subir un archivo, este tendrá prioridad sobre la URL.</p></div>
+      {settings.loginImageUrl && <label class="checkbox-field"><input name="removeLoginImage" type="checkbox" /> Eliminar imagen y volver al diseño abstracto</label>}
+    </section>
+    <div class="admin-form-side">
+      <section class="admin-card">
+        <h2>Ventas y contacto</h2>
+        <div class="field"><label for="whatsappNumber">WhatsApp con código de país</label><input id="whatsappNumber" name="whatsappNumber" value={settings.whatsappNumber} inputmode="numeric" required /><p class="field-hint">Solo números. Ejemplo Venezuela: 584121234567.</p></div>
+        <div class="field"><label for="supportEmail">Correo</label><input id="supportEmail" name="supportEmail" type="email" value={settings.supportEmail} /></div>
+        <div class="field"><label for="currency">Moneda</label><input id="currency" name="currency" value={settings.currency} maxlength="3" required /></div>
+        <div class="field"><label for="locale">Configuración regional</label><input id="locale" name="locale" value={settings.locale} required /></div>
+      </section>
+      <section class="admin-card">
+        <h2>Apariencia</h2>
+        <div class="field"><label for="accentColor">Color principal</label><input id="accentColor" name="accentColor" type="color" value={settings.accentColor} /></div>
+      </section>
+      <section class="admin-card">
+        <h2>Redes sociales</h2>
+        <label class="checkbox-field"><input name="whatsappActive" type="checkbox" checked={settings.whatsappActive} /> Mostrar WhatsApp en la tienda</label>
+        <p class="field-hint">El número se configura arriba. Desactivarlo oculta el enlace público, pero el checkout seguirá enviando los pedidos a ese número.</p>
+        <div class="field"><label for="instagramUrl">Instagram</label><input id="instagramUrl" name="instagramUrl" type="url" value={settings.instagramUrl} placeholder="https://instagram.com/tu-tienda" /></div>
+        <label class="checkbox-field"><input name="instagramActive" type="checkbox" checked={settings.instagramActive} /> Mostrar Instagram</label>
+        <div class="field"><label for="facebookUrl">Facebook</label><input id="facebookUrl" name="facebookUrl" type="url" value={settings.facebookUrl} placeholder="https://facebook.com/tu-tienda" /></div>
+        <label class="checkbox-field"><input name="facebookActive" type="checkbox" checked={settings.facebookActive} /> Mostrar Facebook</label>
+      </section>
+    </div>
+    <div class="admin-form-actions"><button class="button button-dark" type="submit">Guardar ajustes</button></div>
+  </form>
+</AdminLayout>
+
+<script>
+  const loginImageInput = document.querySelector("[data-login-image-input]") as HTMLInputElement | null;
+  const loginImagePreview = document.querySelector("[data-login-image-preview]") as HTMLImageElement | null;
+  let previewUrl = "";
+
+  loginImageInput?.addEventListener("change", () => {
+    const file = loginImageInput.files?.[0];
+    if (!file || !loginImagePreview) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    loginImagePreview.src = previewUrl;
+    loginImagePreview.hidden = false;
+  });
+</script>

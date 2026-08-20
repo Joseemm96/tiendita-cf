@@ -1,0 +1,11 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getCloudflareEnv, getStoreSettings } from "@/lib/db";
+const { DB } = getCloudflareEnv(Astro.locals);
+const settings = await getStoreSettings(DB);
+---
+<BaseLayout title="No encontramos esa página" settings={settings}>
+  <section class="collection" style="min-height:60vh;display:grid;place-items:center;text-align:center">
+    <div><p class="eyebrow">Error 404</p><h1>Esta pieza ya no está aquí.</h1><p>Puede que haya cambiado de lugar o salido de la colección.</p><a class="button button-dark" href="/">Volver a la tienda</a></div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,37 @@
+---
+import { getBrandInitials } from "@/lib/brand";
+
+interface Props {
+  brandName: string;
+  logoUrl?: string;
+  currentPath: string;
+}
+const { brandName, logoUrl = "", currentPath } = Astro.props;
+const brandInitials = getBrandInitials(brandName);
+const links = [
+  { href: "/admin", label: "Resumen", icon: "⌂" },
+  { href: "/admin/productos", label: "Productos", icon: "◇" },
+  { href: "/admin/categorias", label: "Categorías", icon: "◫" },
+  { href: "/admin/ordenes", label: "Órdenes", icon: "☷" },
+  { href: "/admin/ajustes", label: "Ajustes", icon: "⚙" },
+];
+---
+
+<aside class="admin-sidebar">
+  <a class="admin-brand" href="/admin">
+    <span class:list={["admin-brand-symbol", { "has-logo": logoUrl }]} aria-hidden="true">
+      {logoUrl ? <img src={logoUrl} alt="" /> : brandInitials}
+    </span>
+    <div><strong>{brandName}</strong><small>Panel de tienda</small></div>
+  </a>
+  <nav>
+    {links.map((link) => (
+      <a class:list={{ active: currentPath === link.href || (link.href !== "/admin" && currentPath.startsWith(link.href)) }} href={link.href}>
+        <span>{link.icon}</span>{link.label}
+      </a>
+    ))}
+  </nav>
+  <form method="POST" action="/api/admin/logout">
+    <button class="admin-logout" type="submit">Cerrar sesión</button>
+  </form>
+</aside>

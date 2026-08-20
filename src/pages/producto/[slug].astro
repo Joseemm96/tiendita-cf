@@ -1,0 +1,131 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { formatMoney } from "@/lib/format";
+import { getCloudflareEnv, getProductBySlug, getStoreSettings } from "@/lib/db";
+
+const { DB } = getCloudflareEnv(Astro.locals);
+const slug = Astro.params.slug ?? "";
+const [product, settings] = await Promise.all([
+  getProductBySlug(DB, slug),
+  getStoreSettings(DB),
+]);
+
+if (!product) return Astro.redirect("/404");
+const galleryImages = product.images.length
+  ? product.images
+  : [{ id: "placeholder", url: "/placeholders/producto.svg", alt: product.name, position: 0 }];
+const image = galleryImages[0].url;
+const availableVariants = product.variants.filter(
+  (variant) => variant.active && (!variant.trackInventory || variant.stock > 0),
+);
+---
+
+<BaseLayout title={product.name} description={product.description} settings={settings}>
+  <section class="product-page">
+    <div class="product-gallery" data-product-gallery>
+      <img class="product-gallery-main" src={image} alt={galleryImages[0].alt || product.name} data-gallery-main />
+      {galleryImages.length > 1 && (
+        <div class="product-thumbnails" aria-label="Galería de producto">
+          {galleryImages.map((galleryImage, index) => (
+            <button
+              class:list={["product-thumbnail", { active: index === 0 }]}
+              type="button"
+              aria-label={`Ver imagen ${index + 1} de ${product.name}`}
+              aria-pressed={index === 0 ? "true" : "false"}
+              data-gallery-thumbnail
+              data-image-src={galleryImage.url}
+              data-image-alt={galleryImage.alt || `${product.name}, imagen ${index + 1}`}
+            >
+              <img src={galleryImage.url} alt="" loading={index > 2 ? "lazy" : "eager"} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+    <div class="product-details">
+      <p class="breadcrumb"><a href="/">Inicio</a> / {product.categoryName ?? "Colección"}</p>
+      <p class="eyebrow">{product.categoryName ?? "Colección esencial"}</p>
+      <h1>{product.name}</h1>
+      <div class="product-detail-price">
+        <strong>{formatMoney(product.priceCents, settings.currency, settings.locale)}</strong>
+        {product.compareAtCents && <s>{formatMoney(product.compareAtCents, settings.currency, settings.locale)}</s>}
+      </div>
+      <p class="product-description">{product.description}</p>
+
+      <form
+        class="product-add"
+        data-add-product
+        data-product={JSON.stringify({
+          productId: product.id,
+          slug: product.slug,
+          name: product.name,
+          priceCents: product.priceCents,
+          image,
+        })}
+      >
+        <label class="option-label" for="variant"><span>Elige una opción</span><span>{availableVariants.length} disponibles</span></label>
+        <select class="variant-select" id="variant" name="variant" required disabled={availableVariants.length === 0}>
+          {availableVariants.map((variant) => (
+            <option
+              value={variant.id}
+              data-label={variant.label}
+              data-sku={variant.sku}
+              data-price={variant.priceCents ?? product.priceCents}
+              data-stock={variant.trackInventory ? variant.stock : ""}
+            >
+              {variant.label}{variant.trackInventory ? ` · ${variant.stock} disponibles` : ""}
+            </option>
+          ))}
+        </select>
+        <p class="stock-copy">{availableVariants.length ? "Inventario actualizado al momento de confirmar." : "Esta pieza está agotada por ahora."}</p>
+        <button class="button button-accent button-block" type="submit" disabled={availableVariants.length === 0}>
+          {availableVariants.length ? "Agregar al carrito" : "Agotado"}
+        </button>
+      </form>
+
+      <div class="product-meta">
+        <details open><summary>Detalles de la pieza</summary><p>Las fotografías y características pueden adaptarse desde el panel de administración.</p></details>
+        <details><summary>Envíos y entregas</summary><p>Los costos, tiempos y método de entrega se coordinan directamente por WhatsApp.</p></details>
+        <details><summary>Cambios</summary><p>Consulta la disponibilidad y política de cambios con nuestro equipo antes de confirmar.</p></details>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { addToCart } from "@/lib/cart";
+  import type { CartItem } from "@/lib/types";
+
+  const form = document.querySelector<HTMLFormElement>("[data-add-product]");
+  const galleryMain = document.querySelector<HTMLImageElement>("[data-gallery-main]");
+  const galleryThumbnails = document.querySelectorAll<HTMLButtonElement>("[data-gallery-thumbnail]");
+
+  galleryThumbnails.forEach((thumbnail) => thumbnail.addEventListener("click", () => {
+    if (!galleryMain) return;
+    galleryMain.src = thumbnail.dataset.imageSrc ?? galleryMain.src;
+    galleryMain.alt = thumbnail.dataset.imageAlt ?? galleryMain.alt;
+    galleryThumbnails.forEach((item) => {
+      const active = item === thumbnail;
+      item.classList.toggle("active", active);
+      item.setAttribute("aria-pressed", String(active));
+    });
+  }));
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const select = document.getElementById("variant") as HTMLSelectElement | null;
+    const option = select?.selectedOptions[0];
+    if (!select || !option) return;
+    const product = JSON.parse(form.dataset.product ?? "{}") as Omit<CartItem, "variantId" | "variant" | "sku" | "quantity" | "maxQuantity">;
+    const stock = option.dataset.stock ? Number(option.dataset.stock) : null;
+    addToCart({
+      ...product,
+      variantId: option.value,
+      variant: option.dataset.label ?? option.textContent ?? "",
+      sku: option.dataset.sku ?? "",
+      priceCents: Number(option.dataset.price ?? product.priceCents),
+      quantity: 1,
+      maxQuantity: stock,
+    });
+  });
+</script>

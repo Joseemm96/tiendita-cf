@@ -1,0 +1,37 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { formatMoney } from "@/lib/format";
+import { getCloudflareEnv, getStoreSettings } from "@/lib/db";
+const { DB } = getCloudflareEnv(Astro.locals);
+const [settings, orders] = await Promise.all([
+  getStoreSettings(DB),
+  DB.prepare(`SELECT o.*, COUNT(oi.id) AS item_count FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id GROUP BY o.id ORDER BY o.created_at DESC LIMIT 200`).all<{
+    id: string; number: string; customer_name: string; phone: string; customer_email: string | null; address: string | null; status: string; total_cents: number; item_count: number; created_at: string;
+  }>(),
+]);
+const statuses = [{ value: "pending", label: "Pendiente" }, { value: "confirmed", label: "Confirmada" }, { value: "delivered", label: "Entregada" }, { value: "cancelled", label: "Cancelada" }];
+const error = Astro.url.searchParams.get("error");
+---
+
+<AdminLayout title="Órdenes" settings={settings}>
+  <div class="admin-section-heading"><p>Confirmar una orden descuenta su inventario. Cancelar una orden confirmada lo repone.</p></div>
+  {error && <p class="form-error">{error === "stock" ? "No hay inventario suficiente para confirmar esta orden." : "Ese cambio de estado no está permitido."}</p>}
+  <div class="admin-table-wrap">
+    <table class="admin-table">
+      <thead><tr><th>Orden</th><th>Cliente</th><th>Entrega</th><th>Artículos</th><th>Total</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+        {orders.results.map((order) => (
+          <tr>
+            <td><strong>{order.number}</strong></td>
+            <td>{order.customer_name}<br /><small>{order.phone}</small>{order.customer_email && <><br /><a class="admin-email" href={`mailto:${order.customer_email}`}>{order.customer_email}</a></>}</td>
+            <td>{order.address || "Retiro acordado"}</td><td>{order.item_count}</td><td>{formatMoney(order.total_cents, settings.currency, settings.locale)}</td>
+            <td><form method="POST" action={`/api/admin/orders/${order.id}`}><select class="order-select" name="status" onchange="this.form?.submit()">{statuses.map((status) => <option value={status.value} selected={order.status === status.value}>{status.label}</option>)}</select></form></td>
+            <td>{new Date(`${order.created_at}Z`).toLocaleDateString(settings.locale)}</td>
+            <td><a class="button button-ghost button-small receipt-button" href={`/api/admin/orders/${order.id}/receipt`} download={`recibo-${order.number}.pdf`}>PDF</a></td>
+          </tr>
+        ))}
+        {!orders.results.length && <tr><td colspan="8">Aún no hay órdenes.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

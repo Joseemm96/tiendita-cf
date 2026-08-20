@@ -1,0 +1,76 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { getCloudflareEnv, getStoreSettings, listCategories } from "@/lib/db";
+
+const { DB } = getCloudflareEnv(Astro.locals);
+const [categories, settings] = await Promise.all([
+  listCategories(DB, true),
+  getStoreSettings(DB),
+]);
+const nextSortOrder = categories.reduce((maximum, category) => Math.max(maximum, category.sortOrder), 0) + 1;
+const success = Astro.url.searchParams.get("success");
+const error = Astro.url.searchParams.get("error");
+const successMessages: Record<string, string> = {
+  created: "Categoría creada correctamente.",
+  updated: "Categoría actualizada correctamente.",
+  deleted: "Categoría eliminada. Sus productos quedaron sin categoría.",
+};
+const errorMessages: Record<string, string> = {
+  invalid: "Completa el nombre y el identificador de la categoría.",
+  duplicate: "Ya existe una categoría con ese identificador.",
+  save: "No fue posible guardar la categoría.",
+};
+---
+
+<AdminLayout title="Categorías" settings={settings}>
+  <div class="admin-section-heading">
+    <p>Organiza el catálogo, controla el orden y oculta categorías temporalmente.</p>
+  </div>
+
+  {success && <p class="admin-notice admin-notice-success">{successMessages[success] ?? "Cambios guardados."}</p>}
+  {error && <p class="admin-notice admin-notice-error">{errorMessages[error] ?? "Ocurrió un error."}</p>}
+
+  <section class="admin-card category-create-card">
+    <div>
+      <p class="eyebrow">Nueva categoría</p>
+      <h2>Agregar al catálogo</h2>
+    </div>
+    <form class="category-form category-form-create" method="POST" action="/api/admin/categories">
+      <div class="field"><label for="new-category-name">Nombre</label><input id="new-category-name" name="name" required maxlength="80" placeholder="Ej. Accesorios" /></div>
+      <div class="field"><label for="new-category-slug">Identificador</label><input id="new-category-slug" name="slug" maxlength="100" placeholder="Se genera automáticamente" /></div>
+      <div class="field"><label for="new-category-order">Orden</label><input id="new-category-order" name="sortOrder" type="number" min="0" step="1" value={nextSortOrder} /></div>
+      <label class="checkbox-field category-active"><input name="active" type="checkbox" checked /> Visible</label>
+      <button class="button button-dark button-small" type="submit">Crear categoría</button>
+    </form>
+  </section>
+
+  <section class="admin-section">
+    <div class="admin-section-heading"><h2>Categorías existentes</h2><span class="admin-count">{categories.length}</span></div>
+    <div class="category-admin-list">
+      {categories.map((category) => (
+        <form class="admin-card category-form category-form-row" method="POST" action={`/api/admin/categories/${category.id}`}>
+          <div class="field"><label for={`name-${category.id}`}>Nombre</label><input id={`name-${category.id}`} name="name" value={category.name} required maxlength="80" /></div>
+          <div class="field"><label for={`slug-${category.id}`}>Identificador</label><input id={`slug-${category.id}`} name="slug" value={category.slug} required maxlength="100" /></div>
+          <div class="field category-order-field"><label for={`order-${category.id}`}>Orden</label><input id={`order-${category.id}`} name="sortOrder" type="number" min="0" step="1" value={category.sortOrder} /></div>
+          <label class="checkbox-field category-active"><input name="active" type="checkbox" checked={category.active} /> Visible</label>
+          <div class="admin-actions category-actions">
+            <button class="button button-ghost button-small" type="submit" name="_action" value="update">Guardar</button>
+            <button class="button button-danger button-small" type="submit" name="_action" value="delete" data-confirm-delete={category.name}>Eliminar</button>
+          </div>
+        </form>
+      ))}
+      {!categories.length && <p class="admin-empty">Aún no hay categorías.</p>}
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>("[data-confirm-delete]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const name = button.dataset.confirmDelete ?? "esta categoría";
+      if (!window.confirm(`¿Eliminar ${name}? Los productos asociados quedarán sin categoría.`)) {
+        event.preventDefault();
+      }
+    });
+  });
+</script>

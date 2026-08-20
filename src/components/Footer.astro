@@ -1,0 +1,26 @@
+---
+import type { StoreSettings } from "@/config/store";
+import SocialLinks from "@/components/SocialLinks.astro";
+
+interface Props {
+  settings: StoreSettings;
+}
+const { settings } = Astro.props;
+---
+
+<footer class="site-footer">
+  <div>
+    <a class="wordmark footer-wordmark" href="/" aria-label={`Inicio de ${settings.brandName}`}>
+      {settings.logoUrl
+        ? <img class="brand-logo brand-logo-footer" src={settings.logoUrl} alt={settings.brandName} />
+        : settings.brandName}
+    </a>
+    <p>{settings.tagline}</p>
+  </div>
+  <div class="footer-links">
+    <SocialLinks settings={settings} />
+    {settings.supportEmail && <a href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a>}
+    <a href="/admin/login">Administrar</a>
+  </div>
+  <p class="footer-note">© {new Date().getFullYear()} {settings.brandName}. Hecho para crecer.</p>
+</footer>

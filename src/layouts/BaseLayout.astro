@@ -1,0 +1,41 @@
+---
+import "@/styles/global.css";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import CartDrawer from "@/components/CartDrawer.astro";
+import type { StoreSettings } from "@/config/store";
+import { getBrandFavicon } from "@/lib/brand";
+
+interface Props {
+  title?: string;
+  description?: string;
+  settings: StoreSettings;
+  hideChrome?: boolean;
+}
+
+const { title, description, settings, hideChrome = false } = Astro.props;
+const pageTitle = title ? `${title} — ${settings.brandName}` : settings.brandName;
+const favicon = getBrandFavicon(settings.brandName, settings.accentColor);
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content={settings.accentColor} />
+    <meta name="description" content={description ?? settings.description} />
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+    <title>{pageTitle}</title>
+    <style define:vars={{ accent: settings.accentColor }}></style>
+  </head>
+  <body>
+    {!hideChrome && <Header settings={settings} />}
+    <main>
+      <slot />
+    </main>
+    {!hideChrome && <Footer settings={settings} />}
+    {!hideChrome && <CartDrawer settings={settings} />}
+  </body>
+</html>

@@ -1,0 +1,114 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getCloudflareEnv, getStoreSettings } from "@/lib/db";
+
+const { DB } = getCloudflareEnv(Astro.locals);
+const settings = await getStoreSettings(DB);
+---
+
+<BaseLayout title="Finalizar pedido" settings={settings} hideChrome>
+  <div class="checkout-shell" data-checkout data-currency={settings.currency} data-locale={settings.locale}>
+    <section class="checkout-main">
+      <a class="wordmark checkout-brand" href="/">{settings.brandName}<small>volver a la tienda</small></a>
+      <p class="eyebrow">Un último paso</p>
+      <h1>¿A dónde llevamos tu pedido?</h1>
+      <p>Revisaremos la disponibilidad y continuaremos contigo por WhatsApp.</p>
+
+      <form class="checkout-form" data-checkout-form>
+        <div class="field"><label for="name">Nombre completo</label><input id="name" name="name" autocomplete="name" required /></div>
+        <div class="field"><label for="phone">Teléfono</label><input id="phone" name="phone" type="tel" autocomplete="tel" required /></div>
+        <div class="field field-full"><label for="email">Correo electrónico <span class="field-optional">Opcional</span></label><input id="email" name="email" type="email" autocomplete="email" maxlength="160" placeholder="cliente@ejemplo.com" /></div>
+        <div class="field field-full"><label for="deliveryMethod">Entrega</label><select id="deliveryMethod" name="deliveryMethod"><option value="delivery">Envío a domicilio</option><option value="pickup">Retiro acordado</option></select></div>
+        <div class="field field-full" data-address-field><label for="address">Dirección o zona</label><textarea id="address" name="address" autocomplete="street-address" required></textarea></div>
+        <div class="field field-full"><label for="notes">Notas del pedido</label><textarea id="notes" name="notes" placeholder="Referencia, horario o cualquier detalle que debamos saber"></textarea></div>
+        <p class="form-error" data-form-error hidden></p>
+        <button class="button button-accent checkout-submit" type="submit" data-submit-order>Preparar pedido en WhatsApp →</button>
+      </form>
+    </section>
+
+    <aside class="checkout-summary">
+      <p class="eyebrow">Resumen</p>
+      <h2>Tu selección</h2>
+      <div class="checkout-lines" data-checkout-lines></div>
+      <div class="checkout-total"><span>Total</span><strong data-checkout-total></strong></div>
+    </aside>
+  </div>
+</BaseLayout>
+
+<script>
+  import { clearCart, readCart } from "@/lib/cart";
+
+  const checkout = document.querySelector<HTMLElement>("[data-checkout]");
+  const lines = document.querySelector<HTMLElement>("[data-checkout-lines]");
+  const total = document.querySelector<HTMLElement>("[data-checkout-total]");
+  const form = document.querySelector<HTMLFormElement>("[data-checkout-form]");
+  const errorBox = document.querySelector<HTMLElement>("[data-form-error]");
+  const submit = document.querySelector<HTMLButtonElement>("[data-submit-order]");
+  const deliveryMethod = document.getElementById("deliveryMethod") as HTMLSelectElement | null;
+  const address = document.getElementById("address") as HTMLTextAreaElement | null;
+  const addressField = document.querySelector<HTMLElement>("[data-address-field]");
+  const formatter = new Intl.NumberFormat(checkout?.dataset.locale ?? "es-VE", {
+    style: "currency",
+    currency: checkout?.dataset.currency ?? "USD",
+  });
+
+  function escapeHtml(value: string) {
+    return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
+  }
+
+  function render() {
+    const items = readCart();
+    if (!items.length) {
+      window.location.href = "/#coleccion";
+      return;
+    }
+    if (lines) lines.innerHTML = items.map((item) => `
+      <article class="cart-line">
+        <img src="${escapeHtml(item.image)}" alt="" />
+        <div class="cart-line-copy">
+          <div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.variant)} · Cant. ${item.quantity}</p></div>
+          <strong>${formatter.format((item.priceCents * item.quantity) / 100)}</strong>
+        </div>
+      </article>`).join("");
+    if (total) total.textContent = formatter.format(items.reduce((sum, item) => sum + item.priceCents * item.quantity, 0) / 100);
+  }
+
+  deliveryMethod?.addEventListener("change", () => {
+    const pickup = deliveryMethod.value === "pickup";
+    if (addressField) addressField.hidden = pickup;
+    if (address) address.required = !pickup;
+  });
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (errorBox) errorBox.hidden = true;
+    if (submit) { submit.disabled = true; submit.textContent = "Creando orden…"; }
+    const data = new FormData(form);
+    const payload = {
+      customer: {
+        name: data.get("name"),
+        phone: data.get("phone"),
+        email: data.get("email"),
+        deliveryMethod: data.get("deliveryMethod"),
+        address: data.get("address"),
+        notes: data.get("notes"),
+      },
+      items: readCart().map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+    };
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json() as { error?: string; whatsappUrl?: string };
+      if (!response.ok || !result.whatsappUrl) throw new Error(result.error ?? "No fue posible crear la orden.");
+      clearCart();
+      window.location.href = result.whatsappUrl;
+    } catch (error) {
+      if (errorBox) { errorBox.textContent = error instanceof Error ? error.message : "No fue posible crear la orden."; errorBox.hidden = false; }
+      if (submit) { submit.disabled = false; submit.textContent = "Preparar pedido en WhatsApp →"; }
+    }
+  });
+  render();
+</script>

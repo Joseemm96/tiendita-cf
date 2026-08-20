@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 900" role="img" aria-labelledby="title desc">
+  <title id="title">Colección de ropa Línea Base</title>
+  <desc id="desc">Composición editorial abstracta en tonos tierra</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b98d73"/>
+      <stop offset="1" stop-color="#d7bca8"/>
+    </linearGradient>
+    <linearGradient id="cloth" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1e3d2"/>
+      <stop offset="1" stop-color="#c9a58d"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#3c2418" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <rect width="1800" height="900" fill="url(#bg)"/>
+  <circle cx="1510" cy="120" r="420" fill="#9e6c55" opacity=".35"/>
+  <path d="M210 900c50-330 118-566 272-686 133-103 344-103 474 20 119 112 187 339 251 666z" fill="#785245" opacity=".82"/>
+  <path d="M448 900c17-233 32-526 176-652 64-56 175-66 255-26 118 59 174 262 198 678z" fill="url(#cloth)" filter="url(#shadow)"/>
+  <path d="M613 272c36 58 74 88 126 88s95-31 132-93" fill="none" stroke="#a77e67" stroke-width="22" stroke-linecap="round"/>
+  <path d="M1256 900c-19-278 29-535 187-638 92-60 231-31 304 53v585z" fill="#d9c3b5" opacity=".88"/>
+  <path d="M1394 285c-40 148-49 338-32 615" fill="none" stroke="#ac8370" stroke-width="7" opacity=".55"/>
+</svg>

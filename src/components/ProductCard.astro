@@ -1,0 +1,38 @@
+---
+import type { Product } from "@/lib/types";
+import { formatMoney } from "@/lib/format";
+
+interface Props {
+  product: Product;
+  currency: string;
+  locale: string;
+  index?: number;
+}
+
+const { product, currency, locale, index = 0 } = Astro.props;
+const image = product.images[0]?.url ?? "/placeholders/producto.svg";
+const soldOut = product.variants.every(
+  (variant) => variant.trackInventory && variant.stock <= 0,
+);
+---
+
+<article class="product-card" style={`--delay:${Math.min(index * 70, 350)}ms`}>
+  <a class="product-image-wrap" href={`/producto/${product.slug}`}>
+    <img src={image} alt={product.images[0]?.alt ?? product.name} loading="lazy" />
+    {product.compareAtCents && <span class="product-badge">Edición especial</span>}
+    {soldOut && <span class="product-badge badge-dark">Agotado</span>}
+    <span class="product-arrow">↗</span>
+  </a>
+  <div class="product-card-copy">
+    <div>
+      <p>{product.categoryName ?? "Colección"}</p>
+      <h3><a href={`/producto/${product.slug}`}>{product.name}</a></h3>
+    </div>
+    <div class="product-price">
+      <strong>{formatMoney(product.priceCents, currency, locale)}</strong>
+      {product.compareAtCents && (
+        <s>{formatMoney(product.compareAtCents, currency, locale)}</s>
+      )}
+    </div>
+  </div>
+</article>

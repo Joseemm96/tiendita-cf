@@ -1,0 +1,10 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import ProductForm from "@/components/ProductForm.astro";
+import { getCloudflareEnv, getStoreSettings, listCategories } from "@/lib/db";
+const { DB } = getCloudflareEnv(Astro.locals);
+const [categories, settings] = await Promise.all([listCategories(DB, true), getStoreSettings(DB)]);
+---
+<AdminLayout title="Nuevo producto" settings={settings}>
+  <ProductForm categories={categories} settings={settings} />
+</AdminLayout>

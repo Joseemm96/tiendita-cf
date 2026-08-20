@@ -1,0 +1,2 @@
+ADMIN_PASSWORD="cambia-esta-clave"
+SESSION_SECRET="genera-un-secreto-largo-y-aleatorio"

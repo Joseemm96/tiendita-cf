@@ -1,0 +1,41 @@
+---
+import "@/styles/global.css";
+import AdminNav from "@/components/AdminNav.astro";
+import type { StoreSettings } from "@/config/store";
+import { getBrandFavicon } from "@/lib/brand";
+
+interface Props {
+  title: string;
+  settings: StoreSettings;
+}
+
+const { title, settings } = Astro.props;
+const favicon = getBrandFavicon(settings.brandName, settings.accentColor);
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#171714" />
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+    <title>{title} — {settings.brandName}</title>
+    <style define:vars={{ accent: settings.accentColor }}></style>
+  </head>
+  <body class="admin-body">
+    <div class="admin-shell">
+      <AdminNav brandName={settings.brandName} logoUrl={settings.logoUrl} currentPath={Astro.url.pathname} />
+      <main class="admin-main">
+        <header class="admin-topbar">
+          <div>
+            <p class="eyebrow">Administración</p>
+            <h1>{title}</h1>
+          </div>
+          <a class="button button-ghost button-small" href="/" target="_blank">Ver tienda ↗</a>
+        </header>
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

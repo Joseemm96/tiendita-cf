@@ -1,0 +1,26 @@
+{
+  "name": "tiendita-cloudflare",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro build && wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply tiendita-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply tiendita-db --remote",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.2.3",
+    "astro": "^7.2.4",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/node": "^26.2.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.124.0"
+  }
+}

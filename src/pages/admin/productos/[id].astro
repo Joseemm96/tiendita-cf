@@ -1,0 +1,13 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import ProductForm from "@/components/ProductForm.astro";
+import { getCloudflareEnv, getProductById, getStoreSettings, listCategories } from "@/lib/db";
+const { DB } = getCloudflareEnv(Astro.locals);
+const [product, categories, settings] = await Promise.all([
+  getProductById(DB, Astro.params.id ?? ""), listCategories(DB, true), getStoreSettings(DB),
+]);
+if (!product) return Astro.redirect("/admin/productos");
+---
+<AdminLayout title={`Editar ${product.name}`} settings={settings}>
+  <ProductForm product={product} categories={categories} settings={settings} />
+</AdminLayout>

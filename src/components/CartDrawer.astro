@@ -1,0 +1,147 @@
+---
+import type { StoreSettings } from "@/config/store";
+
+interface Props {
+  settings: StoreSettings;
+}
+const { settings } = Astro.props;
+---
+
+<div class="drawer-backdrop" data-cart-backdrop hidden></div>
+<aside
+  class="cart-drawer"
+  data-cart-drawer
+  data-currency={settings.currency}
+  data-locale={settings.locale}
+  aria-label="Carrito"
+  aria-hidden="true"
+>
+  <div class="drawer-heading">
+    <div>
+      <p class="eyebrow">Tu selección</p>
+      <h2>Carrito</h2>
+    </div>
+    <button class="icon-button" type="button" data-close-cart aria-label="Cerrar carrito">×</button>
+  </div>
+  <div class="cart-items" data-cart-items></div>
+  <div class="cart-empty" data-cart-empty>
+    <span>○</span>
+    <h3>Tu carrito está vacío</h3>
+    <p>Explora la colección y guarda aquí tus piezas favoritas.</p>
+    <button class="text-button" type="button" data-close-cart>Seguir explorando</button>
+  </div>
+  <div class="drawer-summary" data-cart-summary hidden>
+    <div><span>Subtotal</span><strong data-cart-subtotal></strong></div>
+    <p>La entrega y forma de pago se coordinan por WhatsApp.</p>
+    <a class="button button-dark button-block" href="/checkout">Continuar pedido</a>
+  </div>
+</aside>
+
+<script>
+  import { readCart, writeCart } from "@/lib/cart";
+
+  const drawer = document.querySelector<HTMLElement>("[data-cart-drawer]");
+  const backdrop = document.querySelector<HTMLElement>("[data-cart-backdrop]");
+  const itemsContainer = document.querySelector<HTMLElement>("[data-cart-items]");
+  const emptyState = document.querySelector<HTMLElement>("[data-cart-empty]");
+  const summary = document.querySelector<HTMLElement>("[data-cart-summary]");
+  const subtotal = document.querySelector<HTMLElement>("[data-cart-subtotal]");
+  const countElements = document.querySelectorAll<HTMLElement>("[data-cart-count]");
+
+  const currency = drawer?.dataset.currency ?? "USD";
+  const locale = drawer?.dataset.locale ?? "es-VE";
+  const money = new Intl.NumberFormat(locale, { style: "currency", currency });
+
+  function escapeHtml(value: string) {
+    return value.replace(/[&<>'"]/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+    })[character] ?? character);
+  }
+
+  function renderCart() {
+    const items = readCart();
+    const count = items.reduce((total, item) => total + item.quantity, 0);
+    countElements.forEach((element) => (element.textContent = String(count)));
+    if (!itemsContainer || !emptyState || !summary || !subtotal) return;
+
+    emptyState.hidden = items.length > 0;
+    summary.hidden = items.length === 0;
+    subtotal.textContent = money.format(
+      items.reduce((total, item) => total + item.priceCents * item.quantity, 0) / 100,
+    );
+    itemsContainer.innerHTML = items
+      .map((item) => `
+        <article class="cart-line" data-variant-id="${escapeHtml(item.variantId)}">
+          <img src="${escapeHtml(item.image)}" alt="" />
+          <div class="cart-line-copy">
+            <div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.variant)}</p></div>
+            <div class="cart-line-bottom">
+              <div class="quantity-control">
+                <button type="button" data-quantity="down" aria-label="Restar">−</button>
+                <span>${item.quantity}</span>
+                <button type="button" data-quantity="up" aria-label="Sumar">+</button>
+              </div>
+              <strong>${money.format((item.priceCents * item.quantity) / 100)}</strong>
+            </div>
+            <button class="remove-line" type="button" data-remove>Eliminar</button>
+          </div>
+        </article>`)
+      .join("");
+  }
+
+  function openCart() {
+    if (!drawer || !backdrop) return;
+    renderCart();
+    backdrop.hidden = false;
+    requestAnimationFrame(() => {
+      drawer.classList.add("is-open");
+      backdrop.classList.add("is-open");
+    });
+    drawer.setAttribute("aria-hidden", "false");
+    document.body.classList.add("no-scroll");
+  }
+
+  function closeCart() {
+    if (!drawer || !backdrop) return;
+    drawer.classList.remove("is-open");
+    backdrop.classList.remove("is-open");
+    drawer.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("no-scroll");
+    window.setTimeout(() => (backdrop.hidden = true), 250);
+  }
+
+  document.querySelectorAll("[data-open-cart]").forEach((button) =>
+    button.addEventListener("click", openCart),
+  );
+  document.querySelectorAll("[data-close-cart]").forEach((button) =>
+    button.addEventListener("click", closeCart),
+  );
+  backdrop?.addEventListener("click", closeCart);
+  window.addEventListener("cart:updated", () => {
+    renderCart();
+    openCart();
+  });
+  window.addEventListener("storage", renderCart);
+  itemsContainer?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const line = target.closest<HTMLElement>("[data-variant-id]");
+    if (!line) return;
+    const items = readCart();
+    const item = items.find((entry) => entry.variantId === line.dataset.variantId);
+    if (!item) return;
+
+    if (target.closest("[data-remove]")) {
+      writeCart(items.filter((entry) => entry.variantId !== item.variantId));
+    } else if (target.closest('[data-quantity="down"]')) {
+      item.quantity -= 1;
+      writeCart(item.quantity > 0 ? items : items.filter((entry) => entry !== item));
+    } else if (target.closest('[data-quantity="up"]')) {
+      item.quantity = item.maxQuantity
+        ? Math.min(item.quantity + 1, item.maxQuantity)
+        : item.quantity + 1;
+      writeCart(items);
+    }
+  });
+  document.addEventListener("astro:page-load", renderCart);
+  renderCart();
+</script>

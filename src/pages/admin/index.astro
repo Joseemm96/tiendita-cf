@@ -1,0 +1,45 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { formatMoney } from "@/lib/format";
+import { getCloudflareEnv, getStoreSettings } from "@/lib/db";
+
+const { DB } = getCloudflareEnv(Astro.locals);
+const [settings, metricsResult, ordersResult] = await Promise.all([
+  getStoreSettings(DB),
+  DB.batch([
+    DB.prepare("SELECT COUNT(*) AS value FROM products WHERE active = 1"),
+    DB.prepare("SELECT COALESCE(SUM(stock), 0) AS value FROM product_variants WHERE active = 1 AND track_inventory = 1"),
+    DB.prepare("SELECT COUNT(*) AS value FROM orders WHERE status = 'pending'"),
+    DB.prepare("SELECT COALESCE(SUM(total_cents), 0) AS value FROM orders WHERE status IN ('confirmed', 'delivered')"),
+  ]),
+  DB.prepare("SELECT * FROM orders ORDER BY created_at DESC LIMIT 6").all<{
+    id: string; number: string; customer_name: string; status: string; total_cents: number; created_at: string;
+  }>(),
+]);
+const metrics = metricsResult.map((result) => Number((result.results[0] as { value: number }).value));
+const statusLabels: Record<string, string> = { pending: "Pendiente", confirmed: "Confirmada", delivered: "Entregada", cancelled: "Cancelada" };
+---
+
+<AdminLayout title="Resumen" settings={settings}>
+  <section class="admin-grid">
+    <article class="stat-card"><p>Productos activos</p><strong>{metrics[0]}</strong><small>en el catálogo</small></article>
+    <article class="stat-card"><p>Unidades disponibles</p><strong>{metrics[1]}</strong><small>con inventario</small></article>
+    <article class="stat-card"><p>Órdenes pendientes</p><strong>{metrics[2]}</strong><small>por confirmar</small></article>
+    <article class="stat-card"><p>Ventas confirmadas</p><strong>{formatMoney(metrics[3], settings.currency, settings.locale)}</strong><small>histórico</small></article>
+  </section>
+
+  <section class="admin-section">
+    <div class="admin-section-heading"><h2>Órdenes recientes</h2><a class="admin-link" href="/admin/ordenes">Ver todas →</a></div>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead><tr><th>Orden</th><th>Cliente</th><th>Estado</th><th>Total</th><th>Fecha</th></tr></thead>
+        <tbody>
+          {ordersResult.results.map((order) => (
+            <tr><td><strong>{order.number}</strong></td><td>{order.customer_name}</td><td><span class:list={["status", `status-${order.status}`]}>{statusLabels[order.status]}</span></td><td>{formatMoney(order.total_cents, settings.currency, settings.locale)}</td><td>{new Date(`${order.created_at}Z`).toLocaleDateString(settings.locale)}</td></tr>
+          ))}
+          {!ordersResult.results.length && <tr><td colspan="5">Aún no hay órdenes.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AdminLayout>

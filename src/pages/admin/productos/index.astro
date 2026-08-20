@@ -1,0 +1,131 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { formatMoney } from "@/lib/format";
+import { getCloudflareEnv, getStoreSettings, listCategories, listProducts } from "@/lib/db";
+const { DB } = getCloudflareEnv(Astro.locals);
+const [products, categories, settings] = await Promise.all([
+  listProducts(DB, true),
+  listCategories(DB, true),
+  getStoreSettings(DB),
+]);
+---
+
+<AdminLayout title="Productos" settings={settings}>
+  <div class="admin-section-heading"><p>Gestiona el catálogo, sus variantes y disponibilidad.</p><a class="button button-dark button-small" href="/admin/productos/nuevo">+ Nuevo producto</a></div>
+
+  <section class="admin-product-tools" aria-label="Buscar, filtrar y ordenar productos">
+    <div class="field admin-search-field">
+      <label for="admin-product-search">Buscar</label>
+      <input id="admin-product-search" type="search" placeholder="Nombre, SKU o variante…" data-admin-product-search />
+    </div>
+    <div class="field">
+      <label for="admin-category-filter">Categoría</label>
+      <select id="admin-category-filter" data-admin-category-filter>
+        <option value="all">Todas las categorías</option>
+        <option value="uncategorized">Sin categoría</option>
+        {categories.map((category) => <option value={category.id}>{category.name}{category.active ? "" : " (inactiva)"}</option>)}
+      </select>
+    </div>
+    <div class="field">
+      <label for="admin-inventory-filter">Inventario</label>
+      <select id="admin-inventory-filter" data-admin-inventory-filter>
+        <option value="all">Todo el inventario</option>
+        <option value="available">Con existencias</option>
+        <option value="low">Inventario bajo (1–5)</option>
+        <option value="empty">Agotados</option>
+        <option value="service">Servicios</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="admin-product-sort">Ordenar</label>
+      <select id="admin-product-sort" data-admin-product-sort>
+        <option value="default">Más recientes</option>
+        <option value="name">Nombre A–Z</option>
+        <option value="category">Categoría A–Z</option>
+        <option value="stock-asc">Inventario: menor a mayor</option>
+        <option value="stock-desc">Inventario: mayor a menor</option>
+      </select>
+    </div>
+  </section>
+
+  <div class="admin-results-summary"><span data-admin-results-count>{products.length}</span> producto{products.length === 1 ? "" : "s"}</div>
+  <div class="admin-table-wrap">
+    <table class="admin-table">
+      <thead><tr><th>Producto</th><th>Categoría</th><th>Precio</th><th>Inventario</th><th>Estado</th><th></th></tr></thead>
+      <tbody data-admin-product-rows>
+        {products.map((product, index) => {
+          const stock = product.variants.filter((variant) => variant.active).reduce((sum, variant) => sum + variant.stock, 0);
+          const inventory = product.itemType === "service" ? "service" : stock === 0 ? "empty" : stock < 6 ? "low" : "available";
+          const searchText = [product.name, product.categoryName, ...product.variants.flatMap((variant) => [variant.label, variant.sku])].filter(Boolean).join(" ").toLowerCase();
+          return <tr
+            data-admin-product-row
+            data-original-index={index}
+            data-search={searchText}
+            data-name={product.name.toLowerCase()}
+            data-category={product.categoryId ?? "uncategorized"}
+            data-category-name={(product.categoryName ?? "").toLowerCase()}
+            data-stock={product.itemType === "service" ? -1 : stock}
+            data-inventory={inventory}
+          >
+            <td><div class="admin-product-cell"><img src={product.images[0]?.url ?? "/placeholders/producto.svg"} alt="" /><div><strong>{product.name}</strong><small>{product.variants.length} variante{product.variants.length === 1 ? "" : "s"}</small></div></div></td>
+            <td>{product.categoryName ?? "—"}</td><td>{formatMoney(product.priceCents, settings.currency, settings.locale)}</td><td><span class:list={{ "stock-low": inventory === "low", "stock-empty": inventory === "empty" }}>{product.itemType === "service" ? "No aplica" : stock}</span></td><td><span class:list={["status", product.active ? "status-confirmed" : "status-cancelled"]}>{product.active ? "Visible" : "Oculto"}</span></td><td><a class="admin-link" href={`/admin/productos/${product.id}`}>Editar</a></td>
+          </tr>;
+        })}
+      </tbody>
+    </table>
+  </div>
+  <p class="admin-empty" data-admin-products-empty hidden>No encontramos productos con esos filtros.</p>
+</AdminLayout>
+
+<script>
+  const rowsContainer = document.querySelector("[data-admin-product-rows]") as HTMLTableSectionElement | null;
+  const rows = Array.from(document.querySelectorAll("[data-admin-product-row]")) as HTMLTableRowElement[];
+  const search = document.querySelector("[data-admin-product-search]") as HTMLInputElement | null;
+  const categoryFilter = document.querySelector("[data-admin-category-filter]") as HTMLSelectElement | null;
+  const inventoryFilter = document.querySelector("[data-admin-inventory-filter]") as HTMLSelectElement | null;
+  const sortControl = document.querySelector("[data-admin-product-sort]") as HTMLSelectElement | null;
+  const resultsCount = document.querySelector("[data-admin-results-count]") as HTMLElement | null;
+  const empty = document.querySelector("[data-admin-products-empty]") as HTMLElement | null;
+
+  const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const stockValue = (row: HTMLTableRowElement) => {
+    const stock = Number(row.dataset.stock ?? -1);
+    return stock < 0 ? Number.POSITIVE_INFINITY : stock;
+  };
+
+  function applyProductTools() {
+    const term = normalize(search?.value.trim() ?? "");
+    const selectedCategory = categoryFilter?.value ?? "all";
+    const selectedInventory = inventoryFilter?.value ?? "all";
+    const selectedSort = sortControl?.value ?? "default";
+
+    rows.sort((left, right) => {
+      if (selectedSort === "name") return (left.dataset.name ?? "").localeCompare(right.dataset.name ?? "", "es");
+      if (selectedSort === "category") return (left.dataset.categoryName ?? "").localeCompare(right.dataset.categoryName ?? "", "es");
+      if (selectedSort === "stock-asc") return stockValue(left) - stockValue(right);
+      if (selectedSort === "stock-desc") return stockValue(right) - stockValue(left);
+      return Number(left.dataset.originalIndex) - Number(right.dataset.originalIndex);
+    });
+    rows.forEach((row) => rowsContainer?.appendChild(row));
+
+    let visible = 0;
+    rows.forEach((row) => {
+      const matchesSearch = !term || normalize(row.dataset.search ?? "").includes(term);
+      const matchesCategory = selectedCategory === "all" || row.dataset.category === selectedCategory;
+      const inventory = row.dataset.inventory ?? "empty";
+      const matchesInventory = selectedInventory === "all"
+        || inventory === selectedInventory
+        || (selectedInventory === "available" && (inventory === "available" || inventory === "low"));
+      row.hidden = !(matchesSearch && matchesCategory && matchesInventory);
+      if (!row.hidden) visible += 1;
+    });
+
+    if (resultsCount) resultsCount.textContent = String(visible);
+    if (empty) empty.hidden = visible > 0;
+  }
+
+  search?.addEventListener("input", applyProductTools);
+  categoryFilter?.addEventListener("change", applyProductTools);
+  inventoryFilter?.addEventListener("change", applyProductTools);
+  sortControl?.addEventListener("change", applyProductTools);
+</script>
