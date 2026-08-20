@@ -2,16 +2,49 @@
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { formatMoney } from "@/lib/format";
 import { getCloudflareEnv, getStoreSettings, listCategories, listProducts } from "@/lib/db";
-const { DB } = getCloudflareEnv(Astro.locals);
-const [products, categories, settings] = await Promise.all([
+import { getLastCatalogOperation } from "@/lib/catalog-service";
+import { getGoogleSheetUrl, isGoogleSheetsConfigured } from "@/lib/google-sheets";
+const cloudflare = getCloudflareEnv(Astro.locals);
+const { DB } = cloudflare;
+const [products, categories, settings, lastSync] = await Promise.all([
   listProducts(DB, true),
   listCategories(DB, true),
   getStoreSettings(DB),
+  getLastCatalogOperation(DB, "google_sync").catch(() => null),
 ]);
+const googleSheetsConfigured = isGoogleSheetsConfigured(cloudflare);
+const googleSheetUrl = getGoogleSheetUrl(cloudflare);
+const lastSyncLabel = lastSync?.created_at
+  ? new Intl.DateTimeFormat("es-VE", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Caracas" }).format(new Date(`${lastSync.created_at.replace(" ", "T")}Z`))
+  : "Todavía no se ha sincronizado";
 ---
 
 <AdminLayout title="Productos" settings={settings}>
-  <div class="admin-section-heading"><p>Gestiona el catálogo, sus variantes y disponibilidad.</p><a class="button button-dark button-small" href="/admin/productos/nuevo">+ Nuevo producto</a></div>
+  <div class="admin-section-heading admin-products-heading">
+    <p>Gestiona el catálogo, sus variantes y disponibilidad.</p>
+    <div class="admin-actions admin-products-actions">
+      <a class="button button-ghost button-small" href="/admin/productos/importar">Importar</a>
+      <a class="button button-ghost button-small" href="/api/admin/products/export?format=csv">Exportar CSV</a>
+      <a class="button button-ghost button-small" href="/api/admin/products/export?format=xlsx">Exportar Excel</a>
+      <a class="button button-dark button-small" href="/admin/productos/nuevo">+ Nuevo producto</a>
+    </div>
+  </div>
+
+  <section class="admin-card admin-sync-card" data-sync-card>
+    <div>
+      <p class="eyebrow">Google Drive</p>
+      <h2>Inventario en Google Sheets</h2>
+      <p class="admin-card-copy" data-sync-message>
+        {googleSheetsConfigured
+          ? `Última sincronización: ${lastSyncLabel}${lastSync?.status === "error" ? " · Con error" : ""}. Respaldo automático a las 8:00 a. m. y 6:00 p. m.`
+          : "Configura la cuenta de servicio y el ID de la hoja para activar la sincronización."}
+      </p>
+    </div>
+    <div class="admin-actions admin-sync-actions">
+      {googleSheetUrl && <a class="button button-ghost button-small" href={googleSheetUrl} target="_blank" rel="noreferrer">Abrir hoja ↗</a>}
+      <button class="button button-dark button-small" type="button" data-sync-button disabled={!googleSheetsConfigured}>Sincronizar ahora</button>
+    </div>
+  </section>
 
   <section class="admin-product-tools" aria-label="Buscar, filtrar y ordenar productos">
     <div class="field admin-search-field">
@@ -128,4 +161,32 @@ const [products, categories, settings] = await Promise.all([
   categoryFilter?.addEventListener("change", applyProductTools);
   inventoryFilter?.addEventListener("change", applyProductTools);
   sortControl?.addEventListener("change", applyProductTools);
+</script>
+
+<script>
+  const syncButton = document.querySelector("[data-sync-button]") as HTMLButtonElement | null;
+  const syncMessage = document.querySelector("[data-sync-message]") as HTMLElement | null;
+  syncButton?.addEventListener("click", async () => {
+    syncButton.disabled = true;
+    syncButton.textContent = "Sincronizando…";
+    try {
+      const response = await fetch("/api/admin/inventory/sync", { method: "POST" });
+      const result = await response.json() as { error?: string; message?: string; syncedAt?: string };
+      if (!response.ok) throw new Error(result.error || "No fue posible sincronizar.");
+      if (syncMessage) {
+        const date = result.syncedAt ? new Date(result.syncedAt).toLocaleString("es-VE", { dateStyle: "medium", timeStyle: "short" }) : "ahora";
+        syncMessage.textContent = `${result.message} Última sincronización: ${date}.`;
+        syncMessage.classList.remove("sync-error");
+      }
+      syncButton.textContent = "Sincronizado";
+      window.setTimeout(() => { syncButton.textContent = "Sincronizar ahora"; syncButton.disabled = false; }, 1800);
+    } catch (error) {
+      if (syncMessage) {
+        syncMessage.textContent = error instanceof Error ? error.message : "No fue posible sincronizar.";
+        syncMessage.classList.add("sync-error");
+      }
+      syncButton.textContent = "Reintentar";
+      syncButton.disabled = false;
+    }
+  });
 </script>

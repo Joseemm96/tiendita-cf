@@ -1,0 +1,183 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { getCloudflareEnv, getStoreSettings } from "@/lib/db";
+
+const { DB } = getCloudflareEnv(Astro.locals);
+const settings = await getStoreSettings(DB);
+---
+
+<AdminLayout title="Importar productos" settings={settings}>
+  <div class="admin-import-layout">
+    <section class="admin-card admin-import-card">
+      <div>
+        <p class="eyebrow">CSV o Excel</p>
+        <h2>Sube y valida el archivo</h2>
+        <p class="admin-card-copy">Primero mostraremos una vista previa. Nada se guardará hasta que confirmes la importación.</p>
+      </div>
+
+      <form data-import-form>
+        <div class="field">
+          <label for="catalog-file">Archivo</label>
+          <input id="catalog-file" name="file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+          <p class="field-hint">Máximo 5 MB y 500 filas. Se admite el catálogo completo o una hoja simple con las columnas sku y stock.</p>
+        </div>
+        <div class="admin-actions">
+          <button class="button button-dark button-small" type="submit" data-preview-button>Validar y previsualizar</button>
+          <a class="button button-ghost button-small" href="/admin/productos">Cancelar</a>
+        </div>
+      </form>
+    </section>
+
+    <aside class="admin-card admin-template-card">
+      <h2>Plantillas</h2>
+      <p class="admin-card-copy">Descarga una plantilla para respetar encabezados y formatos.</p>
+      <div class="admin-download-list">
+        <a href="/api/admin/products/export?template=1&format=xlsx">Catálogo completo · Excel</a>
+        <a href="/api/admin/products/export?template=1&format=csv">Catálogo completo · CSV</a>
+        <a href="/api/admin/products/export?template=1&mode=inventory&format=xlsx">Solo inventario · Excel</a>
+        <a href="/api/admin/products/export?template=1&mode=inventory&format=csv">Solo inventario · CSV</a>
+      </div>
+    </aside>
+  </div>
+
+  <section class="admin-card admin-import-preview" data-import-preview hidden>
+    <div class="admin-section-heading">
+      <div><p class="eyebrow">Vista previa</p><h2 data-preview-title>Resultado</h2></div>
+      <span class="status" data-preview-status></span>
+    </div>
+    <div class="admin-grid admin-import-stats">
+      <article class="stat-card"><p>Filas</p><strong data-stat-rows>0</strong></article>
+      <article class="stat-card"><p>Productos nuevos</p><strong data-stat-products-new>0</strong></article>
+      <article class="stat-card"><p>Productos actualizados</p><strong data-stat-products-updated>0</strong></article>
+      <article class="stat-card"><p>Variantes actualizadas</p><strong data-stat-variants>0</strong></article>
+    </div>
+    <div data-preview-warnings></div>
+    <div class="admin-table-wrap" data-errors-wrap hidden>
+      <table class="admin-table">
+        <thead><tr><th>Fila</th><th>Campo</th><th>Problema</th></tr></thead>
+        <tbody data-errors-body></tbody>
+      </table>
+    </div>
+    <div class="admin-form-actions admin-import-actions">
+      <button class="button button-dark" type="button" data-commit-button disabled>Confirmar importación</button>
+    </div>
+  </section>
+
+  <div class="admin-notice" data-import-message hidden></div>
+</AdminLayout>
+
+<script>
+  type Preview = {
+    mode: "catalog" | "inventory";
+    totalRows: number;
+    createdProducts: number;
+    updatedProducts: number;
+    createdVariants: number;
+    updatedVariants: number;
+    errors: { row: number; field: string; message: string }[];
+    warnings: string[];
+  };
+
+  const form = document.querySelector("[data-import-form]") as HTMLFormElement | null;
+  const fileInput = document.querySelector("#catalog-file") as HTMLInputElement | null;
+  const previewButton = document.querySelector("[data-preview-button]") as HTMLButtonElement | null;
+  const commitButton = document.querySelector("[data-commit-button]") as HTMLButtonElement | null;
+  const previewPanel = document.querySelector("[data-import-preview]") as HTMLElement | null;
+  const message = document.querySelector("[data-import-message]") as HTMLElement | null;
+
+  function setText(selector: string, value: string | number) {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = String(value);
+  }
+
+  function showMessage(text: string, type: "success" | "error") {
+    if (!message) return;
+    message.textContent = text;
+    message.hidden = false;
+    message.className = `admin-notice admin-notice-${type}`;
+  }
+
+  function renderPreview(preview: Preview) {
+    if (!previewPanel || !commitButton) return;
+    previewPanel.hidden = false;
+    setText("[data-preview-title]", preview.mode === "inventory" ? "Actualización de inventario" : "Importación de catálogo");
+    setText("[data-stat-rows]", preview.totalRows);
+    setText("[data-stat-products-new]", preview.createdProducts);
+    setText("[data-stat-products-updated]", preview.updatedProducts);
+    setText("[data-stat-variants]", preview.createdVariants + preview.updatedVariants);
+    const status = document.querySelector("[data-preview-status]") as HTMLElement | null;
+    if (status) {
+      status.textContent = preview.errors.length ? `${preview.errors.length} error${preview.errors.length === 1 ? "" : "es"}` : "Listo para importar";
+      status.className = `status ${preview.errors.length ? "status-cancelled" : "status-confirmed"}`;
+    }
+    const warnings = document.querySelector("[data-preview-warnings]") as HTMLElement | null;
+    if (warnings) {
+      warnings.replaceChildren(...preview.warnings.map((warning) => {
+        const paragraph = document.createElement("p");
+        paragraph.className = "admin-notice admin-notice-warning";
+        paragraph.textContent = warning;
+        return paragraph;
+      }));
+    }
+    const errorsWrap = document.querySelector("[data-errors-wrap]") as HTMLElement | null;
+    const errorsBody = document.querySelector("[data-errors-body]") as HTMLTableSectionElement | null;
+    if (errorsBody) {
+      errorsBody.replaceChildren(...preview.errors.map((error) => {
+        const row = document.createElement("tr");
+        for (const value of [error.row, error.field, error.message]) {
+          const cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.appendChild(cell);
+        }
+        return row;
+      }));
+    }
+    if (errorsWrap) errorsWrap.hidden = !preview.errors.length;
+    commitButton.disabled = preview.errors.length > 0;
+  }
+
+  async function sendFile(commit: boolean) {
+    const file = fileInput?.files?.[0];
+    if (!file) throw new Error("Selecciona un archivo antes de continuar.");
+    const body = new FormData();
+    body.set("file", file);
+    const response = await fetch(`/api/admin/products/import${commit ? "?commit=1" : ""}`, { method: "POST", body });
+    const result = await response.json() as { error?: string; message?: string; preview?: Preview };
+    if (result.preview) renderPreview(result.preview);
+    if (!response.ok) throw new Error(result.error || "No fue posible procesar el archivo.");
+    return result;
+  }
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (message) message.hidden = true;
+    if (previewButton) { previewButton.disabled = true; previewButton.textContent = "Validando…"; }
+    try {
+      await sendFile(false);
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "No fue posible validar el archivo.", "error");
+    } finally {
+      if (previewButton) { previewButton.disabled = false; previewButton.textContent = "Validar y previsualizar"; }
+    }
+  });
+
+  fileInput?.addEventListener("change", () => {
+    if (previewPanel) previewPanel.hidden = true;
+    if (commitButton) commitButton.disabled = true;
+    if (message) message.hidden = true;
+  });
+
+  commitButton?.addEventListener("click", async () => {
+    commitButton.disabled = true;
+    commitButton.textContent = "Importando…";
+    try {
+      const result = await sendFile(true);
+      showMessage(`${result.message} Ya puedes sincronizar el inventario con Drive desde Productos.`, "success");
+      commitButton.textContent = "Importación completada";
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "No fue posible importar el archivo.", "error");
+      commitButton.disabled = false;
+      commitButton.textContent = "Confirmar importación";
+    }
+  });
+</script>

@@ -15,6 +15,9 @@ La demostración está configurada como una tienda de ropa, pero el modelo permi
 - Imágenes de productos y portada administrables en Cloudflare R2.
 - Autenticación con cookie `HttpOnly` firmada mediante HMAC.
 - Descuento de inventario al confirmar una orden y reposición al cancelarla.
+- Importación y exportación del catálogo en CSV y Excel con validación previa.
+- Actualización masiva de inventario por SKU.
+- Sincronización manual y dos veces al día con una hoja de Google Sheets.
 - Datos de demostración y cuatro productos de moda.
 
 ## Arquitectura
@@ -44,6 +47,8 @@ Edita `.dev.vars` y establece una contraseña y un secreto largo:
 ```dotenv
 ADMIN_PASSWORD="una-clave-segura"
 SESSION_SECRET="un-valor-aleatorio-de-al-menos-32-caracteres"
+GOOGLE_SERVICE_ACCOUNT_JSON=""
+GOOGLE_SHEET_ID=""
 ```
 
 La tienda queda disponible en `http://localhost:4321` y el dashboard en `http://localhost:4321/admin`.
@@ -72,6 +77,8 @@ Guarda las credenciales del dashboard como secretos del Worker:
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put SESSION_SECRET
 ```
+
+Los secretos de Google son opcionales. La tienda y la importación CSV/Excel funcionan sin ellos.
 
 Finalmente despliega:
 
@@ -174,6 +181,46 @@ M · Blanco | CAM-BLA-M | 3 | talla=M, color=Blanco
 - **Atributos:** información estructurada separada por comas. Cada atributo utiliza `nombre=valor`.
 
 Puedes utilizar otros atributos según el negocio, por ejemplo `duración=60 minutos`, `modalidad=Online` o `capacidad=10 personas`. Al editar un producto, las líneas eliminadas del campo dejan sus variantes inactivas. El precio configurado en el formulario se aplica actualmente a todas sus variantes.
+
+### Importar y exportar productos
+
+En **Dashboard → Productos** puedes exportar el catálogo completo como CSV o Excel y abrir el asistente de importación. El asistente valida el archivo y muestra productos, variantes y errores antes de guardar cualquier cambio.
+
+La plantilla completa usa una fila por SKU. Para ajustes rápidos también hay una plantilla de inventario con solo dos columnas:
+
+```csv
+sku,stock
+LIN-ARE-S,8
+LIN-ARE-M,12
+```
+
+- El SKU es único y se utiliza para localizar variantes existentes.
+- Los IDs se incluyen en las exportaciones; déjalos vacíos para crear registros nuevos.
+- Omitir una variante no la elimina. Usa `variant_active=false` para ocultarla.
+- Las imágenes se representan con URLs separadas por `|`. Una celda vacía conserva las imágenes existentes.
+- Cada importación admite hasta 500 filas y archivos de 5 MB.
+- Los cambios se ejecutan en un lote transaccional de D1.
+
+### Google Sheets para consultar el inventario
+
+La integración mantiene D1 como fuente oficial y publica una copia de consulta en una pestaña llamada **Inventario**. El botón **Sincronizar ahora** está en **Dashboard → Productos**. También se ejecuta automáticamente a las 8:00 a. m. y 6:00 p. m. de Caracas mediante un único Cron Trigger (`0 12,22 * * *`).
+
+Para configurarla:
+
+1. Crea un proyecto en Google Cloud y habilita **Google Sheets API**.
+2. Crea una cuenta de servicio y descarga su credencial JSON.
+3. Crea una hoja de Google Sheets vacía y compártela con el `client_email` de la cuenta de servicio como editor.
+4. Copia el identificador que aparece entre `/d/` y `/edit` en la URL de la hoja.
+5. Guarda ambos valores como secretos del Worker:
+
+```bash
+npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
+npx wrangler secret put GOOGLE_SHEET_ID
+```
+
+En el primer comando pega el contenido completo del JSON. En el segundo pega solamente el ID de la hoja. La aplicación crea automáticamente la pestaña **Inventario** si todavía no existe.
+
+Para desarrollo local puedes colocar esos valores en `.dev.vars`. Si permanecen vacíos, el botón aparece desactivado y el cron omite la sincronización sin modificar el catálogo.
 
 ### Sesión del dashboard
 

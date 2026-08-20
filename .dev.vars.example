@@ -1,2 +1,4 @@
 ADMIN_PASSWORD="cambia-esta-clave"
 SESSION_SECRET="genera-un-secreto-largo-y-aleatorio"
+GOOGLE_SERVICE_ACCOUNT_JSON=""
+GOOGLE_SHEET_ID=""

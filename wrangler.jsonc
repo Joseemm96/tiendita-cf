@@ -1,6 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "tiendita-template",
+	"main": "src/worker.ts",
 	"compatibility_date": "2026-08-19",
 	"compatibility_flags": [
 		"nodejs_compat"
@@ -23,6 +24,11 @@
 			"bucket_name": "tiendita-product-images"
 		}
 	],
+	"triggers": {
+		"crons": [
+			"0 12,22 * * *"
+		]
+	},
 	"observability": {
 		"enabled": true
 	}
